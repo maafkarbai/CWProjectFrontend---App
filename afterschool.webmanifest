@@ -1,0 +1,19 @@
+{
+  "name": "AfterSchool",
+  "description": "After School Activities App for MDX Full Stack CW Project\n    \n    \n  ",
+  "short_name": "AfterSchool",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/images/logo.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ],
+  "lang": "en-US",
+  "scope": "/"
+}

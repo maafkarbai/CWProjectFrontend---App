@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="./images/logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./public/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+    <script src="fontawesome.js" crossorigin="anonymous"></script>
+    <link rel="manifest" href="afterschool.webmanifest" />
+    <title>After School Activities</title>
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("/service-worker.js")
+            .then((reg) => console.log("✅ Service Worker registered", reg))
+            .catch((err) => console.error("❌ Service Worker failed", err));
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <header
+        id="site-header"
+        class="flex items-center p-4 justify-between flex-wrap mx-auto fixed top-0 w-full bg-white z-10 shadow-md"
+      >
+        <div class="logo flex gap-2 items-center">
+          <a href="#" @click.prevent="goToHome" class="flex items-center gap-2">
+            <i class="fa-solid fa-baseball-bat-ball"></i>
+            <span class="min-w-fit font-bold">After School Activities</span>
+          </a>
+        </div>
+        <div class="search-box border-2 flex">
+          <input
+            type="search"
+            v-model="searchQuery"
+            placeholder="Search Lessons & Locations"
+            class="p-2 w-3xs"
+            aria-label="Search Lessons and Locations"
+          />
+        </div>
+        <button
+          class="cart bg-black p-2 text-white cursor-pointer hover:bg-gray-800"
+          v-if="cart.length > 0"
+          @click="toggleCart"
+        >
+          <i class="fa-solid fa-cart-shopping"></i>
+          Checkout ({{ cart.length }})
+        </button>
+      </header>
+
+      <main class="pt-24 mx-auto px-4 max-w-[890px]">
+        <!-- Lessons Section -->
+        <div v-if="!checkoutPage">
+          <div class="flex justify-between items-center">
+            <p
+              class="underline underline-offset-4 decoration-[8px] text-4xl max-w-[90%]"
+            >
+              Lessons
+            </p>
+            <div class="filters">
+              <i class="fa-solid fa-filter"></i>
+              <select v-model="sortAttribute">
+                <option value="" disabled>Sort By</option>
+                <option value="LessonName">Subject</option>
+                <option value="Location">Location</option>
+                <option value="Price">Price</option>
+                <option value="Space">Availability</option>
+              </select>
+              <select v-model="sortOrder" class="p-2">
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+              </select>
+            </div>
+          </div>
+          <div
+            class="products-grid flex flex-wrap gap-4 w-full items-center justify-center pt-4 min-h-[80vh]"
+          >
+            <div v-if="sortedProducts.length === 0" class="no-results">
+              <p class="text-xl font-semibold text-red-500">
+                No lessons found. Try searching for another activity or
+                location.
+              </p>
+            </div>
+            <div
+              v-for="product in sortedProducts"
+              :key="product._id"
+              class="product-item border-2 p-2"
+            >
+              <div class="card-section">
+                <img
+                  class="object-cover w-64 h-64 mx-auto"
+                  :src="product.LessonImage"
+                  :alt="product.LessonName + ' Lesson Image'"
+                />
+                <h2 class="text-2xl text-center">{{ product.LessonName }}</h2>
+              </div>
+              <div class="reviews-container flex justify-center">
+                <span v-for="n in product.Rating" :key="'full-' + n">
+                  <i class="fa-solid fa-star"></i>
+                </span>
+                <span v-for="n in (5 - product.Rating)" :key="'empty-' + n">
+                  <i class="fa-regular fa-star"></i>
+                </span>
+              </div>
+              <p>
+                <span class="font-bold">Location: </span>{{ product.Location }}
+              </p>
+              <p>
+                <span class="font-bold">Available Items:</span>
+                {{ product.Space }}
+              </p>
+              <p>
+                <span class="font-bold">Price: </span>{{ product.Price }} AED
+              </p>
+              <div class="card-section-2">
+                <button
+                  class="addToCart border-2 p-2 hover:bg-black hover:text-white cursor-pointer"
+                  @click="addToCart(product)"
+                  :disabled="!canAddToCart(product)"
+                >
+                  Add to cart
+                </button>
+                <span v-if="product.Space <= 0">Bookings Full</span>
+                <span v-else-if="product.Space < 5"
+                  >Only {{ product.Space }} left!</span
+                >
+                <span v-if="product.Space < 5" class="text-red-700"
+                  >Buy Now!</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Checkout Section -->
+        <div
+          v-if="checkoutPage"
+          class="pt-24 w-full flex justify-center checkout-page"
+        >
+          <div class="container mx-auto px-2 py-4">
+            <p
+              class="underline underline-offset-4 decoration-[8px] text-4xl max-w-[90%] mb-4"
+            >
+              Check out
+            </p>
+            <form class="grid grid-cols-2 gap-4">
+              <!-- Left Column: Form Fields -->
+              <div class="space-y-2">
+                <div class="form-group flex flex-col gap-2">
+                  <label for="firstName" class="font-semibold"
+                    >First Name</label
+                  >
+                  <input
+                    type="text"
+                    id="firstName"
+                    v-model.trim="order.firstName"
+                    required
+                    class="p-2 border rounded"
+                    aria-required="true"
+                  />
+                  <span
+                    v-if="order.firstName && !validFirstName"
+                    class="text-red-500 text-sm"
+                  >
+                    First name must contain letters only.
+                  </span>
+                </div>
+                <div class="form-group flex flex-col gap-2">
+                  <label for="lastName" class="font-semibold">Last Name</label>
+                  <input
+                    type="text"
+                    id="lastName"
+                    v-model.trim="order.lastName"
+                    required
+                    class="p-2 border rounded"
+                    aria-required="true"
+                  />
+                  <span
+                    v-if="order.lastName && !validLastName"
+                    class="text-red-500 text-sm"
+                  >
+                    Last name must contain letters only.
+                  </span>
+                </div>
+                <div class="form-group flex flex-col gap-2">
+                  <label for="address" class="font-semibold"
+                    >Your Address</label
+                  >
+                  <textarea
+                    id="address"
+                    rows="4"
+                    v-model.trim="order.address"
+                    class="p-2 border rounded"
+                    :required="order.method === 'Home Delivery'"
+                    aria-required="true"
+                  ></textarea>
+                </div>
+                <div class="form-group flex flex-col gap-2">
+                  <label for="zip" class="font-semibold">Zip Code</label>
+                  <input
+                    type="text"
+                    id="zip"
+                    v-model="order.zip"
+                    class="p-2 border rounded"
+                    :required="order.method === 'Home Delivery'"
+                    aria-required="true"
+                  />
+                  <span
+                    v-if="order.zip && !validZip"
+                    class="text-red-500 text-sm"
+                  >
+                    Please enter a valid zip code (exactly 5 digits).
+                  </span>
+                </div>
+                <div class="form-group flex flex-col gap-2">
+                  <label for="phone" class="font-semibold">Phone</label>
+                  <input
+                    type="tel"
+                    id="phone"
+                    v-model.trim="order.phone"
+                    pattern="[0-9]{7,15}"
+                    title="Please enter a valid phone number (7 to 15 digits)"
+                    required
+                    class="p-2 border rounded"
+                    aria-required="true"
+                  />
+                  <span
+                    v-if="order.phone && !validPhone"
+                    class="text-red-500 text-sm"
+                  >
+                    Please enter a valid phone number (7 to 15 digits).
+                  </span>
+                </div>
+                <div class="form-group">
+                  <label for="gift" class="flex items-center gap-2 font-bold">
+                    <input
+                      type="checkbox"
+                      id="gift"
+                      v-model="order.gift"
+                      class="form-checkbox"
+                      :true-value="'Send as a gift'"
+                      :false-value="'Do not send as a gift'"
+                    />
+                    <span class="text-lg">As a Gift? 🎁</span>
+                  </label>
+                </div>
+                <div class="form-group">
+                  <p class="font-bold mb-2">Order Method</p>
+                  <div class="flex flex-col gap-2">
+                    <label for="home" class="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        id="home"
+                        value="Home Delivery"
+                        v-model="order.method"
+                        class="form-radio"
+                        required
+                        aria-required="true"
+                      />
+                      <span>🏠 Home Delivery</span>
+                    </label>
+                    <label for="business" class="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        id="business"
+                        value="Business"
+                        v-model="order.method"
+                        class="form-radio"
+                        required
+                        aria-required="true"
+                      />
+                      <span>🏢 Business</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <!-- Right Column: Order Summary & Cart Items -->
+              <div class="space-y-4">
+                <h2 class="text-2xl font-bold mb-2">
+                  Order Summary &amp; Cart Items
+                </h2>
+                <div class="min-w-fit">
+                  <table class="w-full border-collapse">
+                    <thead>
+                      <tr>
+                        <th class="border p-2 text-left">Field</th>
+                        <th class="border p-2 text-left">Value</th>
+                        <th class="border p-2 text-left">Cart Items</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="(item, index) in orderSummary"
+                        :key="item.field"
+                      >
+                        <td class="border p-2">{{ item.field }}</td>
+                        <td class="border p-2">{{ item.value }}</td>
+                        <td
+                          class="border p-2"
+                          v-if="index === 0"
+                          :rowspan="orderSummary.length"
+                        >
+                          <div v-if="cart.length === 0">No cart items.</div>
+                          <div v-else class="space-y-2 border p-2">
+                            <div
+                              v-for="(cartItem, idx) in cart"
+                              :key="cartItem._id"
+                              class="flex items-center gap-2"
+                            >
+                              <span>
+                                <img
+                                  :src="cartItem.LessonImage"
+                                  :alt="cartItem.LessonName + ' Image'"
+                                  class="w-4 object-cover"
+                                />
+
+                                {{ cartItem.LessonName }}
+                              </span>
+                              <!-- Minus Button -->
+                              <button
+                                @click="decrementCartItem(cartItem._id)"
+                                class="p-1 border rounded cursor-pointer"
+                                aria-label="Decrease quantity"
+                              >
+                                -
+                              </button>
+                              <!-- Quantity Display -->
+                              <span class="px-2">{{ cartItem.quantity }}</span>
+                              <!-- Plus Button -->
+                              <button
+                                @click="incrementCartItem(cartItem._id)"
+                                class="p-1 border rounded cursor-pointer"
+                                aria-label="Increase quantity"
+                              >
+                                +
+                              </button>
+                              <button
+                                @click="removeCartItem(idx)"
+                                class="bg-red-500 text-white p-1 rounded cursor-pointer"
+                                aria-label="Remove item"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <button
+                    class="p-2 text-2xl w-full bg-green-400 text-white mt-2 cursor-pointer hover:bg-green-500"
+                    @click.prevent="submitOrder"
+                    :disabled="!checkoutEnabled"
+                  >
+                    Checkout ➡️
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </main>
+      <transition name="fade">
+        <div
+          v-if="orderSubmitted"
+          class="popup-modal"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div class="popup-content">
+            <button
+              class="popup-close"
+              @click="closePopup"
+              aria-label="Close modal"
+            >
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+            <p class="text-3xl font-semibold">Your order has been submitted!</p>
+          </div>
+        </div>
+      </transition>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-6 w-full">
+      <a
+        href="#"
+        class="block w-full p-6 bg-gray-700 text-xl text-white hover:underline hover:bg-gray-800 cursor-pointer text-center"
+        @click="scrollToTop"
+        aria-label="Scroll to top"
+      >
+        Go to Top
+      </a>
+    </footer>
+
+    <script>
+      let debounceTimer;
+      new Vue({
+        el: "#app",
+        data: {
+          order: {
+            firstName: "",
+            lastName: "",
+            address: "",
+            zip: null,
+            phone: "",
+            gift: false,
+            method: "",
+          },
+          cart: [],
+          searchQuery: "",
+          sortAttribute: "",
+          sortOrder: "asc",
+          checkoutPage: false,
+          orderSubmitted: false,
+          lessons: [],
+        },
+
+        computed: {
+          totalAmount() {
+            return this.cart.reduce(
+              (sum, item) => sum + item.Price * item.quantity,
+              0
+            );
+          },
+          orderSummary() {
+            return [
+              { field: "First Name", value: this.order.firstName },
+              { field: "Last Name", value: this.order.lastName },
+              { field: "Address", value: this.order.address },
+              { field: "Zip Code", value: this.order.zip },
+              { field: "Phone", value: this.order.phone },
+              { field: "Gift", value: this.order.gift ? "Yes" : "No" },
+              { field: "Order Method", value: this.order.method },
+              { field: "Total Amount", value: this.totalAmount + " AED" },
+            ];
+          },
+          validZip() {
+            const zipString = String(this.order.zip);
+            return /^\d{5}$/.test(zipString);
+          },
+          validPhone() {
+            const phoneRegex = /^[0-9]{7,15}$/;
+            return phoneRegex.test(this.order.phone);
+          },
+          validFirstName() {
+            return /^[A-Za-z ]+$/.test(this.order.firstName.trim());
+          },
+          validLastName() {
+            return /^[A-Za-z ]+$/.test(this.order.lastName.trim());
+          },
+          checkoutEnabled() {
+            if (
+              this.cart.length === 0 ||
+              !this.validFirstName ||
+              !this.validLastName ||
+              !this.validPhone ||
+              !this.order.method
+            ) {
+              return false;
+            }
+            if (this.order.method === "Home Delivery") {
+              if (
+                !this.order.address ||
+                this.order.address.trim().length === 0 ||
+                !this.validZip
+              ) {
+                return false;
+              }
+            }
+            return true;
+          },
+          filteredProducts() {
+            const query = this.searchQuery.toLowerCase();
+            return this.lessons.filter(
+              (product) =>
+                product.LessonName.toLowerCase().includes(query) ||
+                product.Location.toLowerCase().includes(query) ||
+                String(product.Price).includes(query) ||
+                String(product.Space).includes(query)
+            );
+          },
+          sortedProducts() {
+            let products = this.filteredProducts;
+
+            if (!this.sortAttribute) {
+              return products;
+            }
+
+            return products.slice().sort((a, b) => {
+              let valA = a[this.sortAttribute];
+              let valB = b[this.sortAttribute];
+
+              // Convert to lower case if string
+              if (typeof valA === "string" && typeof valB === "string") {
+                valA = valA.toLowerCase();
+                valB = valB.toLowerCase();
+                return this.sortOrder === "asc"
+                  ? valA.localeCompare(valB)
+                  : valB.localeCompare(valA);
+              }
+
+              // Compare as numbers
+              return this.sortOrder === "asc" ? valA - valB : valB - valA;
+            });
+          },
+        },
+        watch: {
+          searchQuery(newQuery) {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+              if (!newQuery) {
+                this.fetchLessons();
+              } else {
+                fetch(
+                  `https://fullstackprojectbackend-tt3a.onrender.com/search?q=${encodeURIComponent(
+                    newQuery
+                  )}`
+                )
+                  .then((res) => res.json())
+                  .then((data) => {
+                    this.lessons = data;
+                  })
+                  .catch((err) => {
+                    console.error("Search error:", err);
+                  });
+              }
+            }, 400);
+          },
+        },
+        methods: {
+          async fetchLessons() {
+            try {
+              const response = await fetch(
+                "https://fullstackprojectbackend-tt3a.onrender.com/lessons"
+              );
+              if (!response.ok) throw new Error("Failed to fetch lessons");
+              const data = await response.json();
+              this.lessons = data.map((lesson) => ({
+                ...lesson,
+                initialSpace: lesson.Space,
+              }));
+            } catch (error) {
+              console.error("Error fetching lessons:", error);
+            }
+          },
+          addToCart(product) {
+            if (product.Space > 0) {
+              let existingCartItem = this.cart.find(
+                (item) => item._id === product._id
+              );
+              if (existingCartItem) {
+                if (existingCartItem.quantity < product.initialSpace) {
+                  existingCartItem.quantity++;
+                }
+              } else {
+                this.cart.push({ ...product, quantity: 1 });
+              }
+              const qtyInCart = this.cart
+                .filter((item) => item._id === product._id)
+                .reduce((acc, curr) => acc + curr.quantity, 0);
+              product.Space = product.initialSpace - qtyInCart;
+            }
+          },
+          updateCart(productId, newQuantity) {
+            let cartItem = this.cart.find((item) => item._id === productId);
+            if (!cartItem) return;
+            let product = this.lessons.find((p) => p._id === productId);
+            if (!product) return;
+            if (newQuantity < 1) {
+              this.removeCartItem(this.cart.indexOf(cartItem));
+              return;
+            }
+            if (newQuantity > product.initialSpace) {
+              newQuantity = product.initialSpace;
+            }
+            cartItem.quantity = newQuantity;
+            const qtyInCart = this.cart
+              .filter((item) => item._id === productId)
+              .reduce((acc, curr) => acc + curr.quantity, 0);
+            product.Space = product.initialSpace - qtyInCart;
+          },
+          removeCartItem(index) {
+            const cartItem = this.cart[index];
+            let product = this.lessons.find((p) => p._id === cartItem._id);
+            if (product) {
+              let qtyInCart = 0;
+              this.cart.forEach((item) => {
+                if (item._id === product._id) {
+                  qtyInCart += item.quantity;
+                }
+              });
+              product.Space = product.initialSpace - qtyInCart;
+            }
+            const quantityToRestore = cartItem.quantity;
+
+            // Update lesson availability in DB
+            fetch(
+              `https://fullstackprojectbackend-tt3a.onrender.com/lessons/${cartItem._id}`,
+              {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ $inc: { Space: quantityToRestore } }),
+              }
+            )
+              .then((res) => res.json())
+              .then(() => {
+                this.cart.splice(index, 1);
+                this.fetchLessons(); // Optional: refresh availability
+              })
+              .catch((err) => {
+                console.error("Failed to update lesson space on removal:", err);
+                alert("Error updating lesson availability. Try again.");
+              });
+          },
+          incrementCartItem(productId) {
+            let cartItem = this.cart.find((item) => item._id === productId);
+            if (!cartItem) return;
+            let product = this.lessons.find((p) => p._id === productId);
+            if (!product) return;
+            if (cartItem.quantity < product.initialSpace) {
+              fetch(
+                `https://fullstackprojectbackend-tt3a.onrender.com/lessons/${productId}`,
+                {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ $inc: { Space: -1 } }),
+                }
+              )
+                .then((res) => res.json())
+                .then(() => {
+                  this.updateCart(productId, cartItem.quantity + 1);
+                })
+                .catch((err) => {
+                  console.error("Failed to decrease space:", err);
+                  alert("Unable to add more to cart. Try again.");
+                });
+            }
+          },
+          decrementCartItem(productId) {
+            let cartItem = this.cart.find((item) => item._id === productId);
+            if (!cartItem) return;
+            if (cartItem.quantity > 1) {
+              fetch(
+                `https://fullstackprojectbackend-tt3a.onrender.com/lessons/${productId}`,
+                {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ $inc: { Space: 1 } }),
+                }
+              )
+                .then((res) => res.json())
+                .then(() => {
+                  this.updateCart(productId, cartItem.quantity - 1);
+                })
+                .catch((err) => {
+                  console.error("Failed to restore space:", err);
+                  alert("Unable to update cart. Try again.");
+                });
+            } else {
+              const idx = this.cart.findIndex((item) => item._id === productId);
+              if (idx !== -1) {
+                this.removeCartItem(idx);
+              }
+            }
+          },
+          canAddToCart(product) {
+            return product.Space > 0;
+          },
+          scrollToTop() {
+            window.scrollTo({
+              top: 0,
+              behavior: "smooth",
+            });
+          },
+          toggleCart() {
+            this.checkoutPage = !this.checkoutPage;
+            this.$nextTick(() => {
+              if (this.checkoutPage) {
+                const checkoutSection =
+                  document.querySelector(".checkout-page");
+                if (checkoutSection) {
+                  checkoutSection.scrollIntoView({ behavior: "smooth" });
+                }
+              } else {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }
+            });
+          },
+          goToHome() {
+            this.checkoutPage = false;
+            window.scrollTo({
+              top: 0,
+              behavior: "smooth",
+            });
+          },
+          async submitOrder() {
+            const orderPayload = {
+              firstName: this.order.firstName,
+              lastName: this.order.lastName,
+              phone: this.order.phone,
+              method: this.order.method,
+              address:
+                this.order.method === "Home Delivery" ? this.order.address : "",
+              zip: this.order.zip,
+              gift: this.order.gift,
+              lessons: this.cart.map((item) => ({
+                id: item._id,
+                quantity: item.quantity,
+              })),
+            };
+
+            try {
+              const response = await fetch(
+                "https://fullstackprojectbackend-tt3a.onrender.com/orders",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(orderPayload),
+                }
+              );
+              if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Order submission failed");
+              }
+              const data = await response.json();
+              alert("Order submitted successfully! Order ID: " + data.orderId);
+
+              // Clear cart and reset form
+              this.cart = [];
+              this.order = {
+                firstName: "",
+                lastName: "",
+                address: "",
+                zip: null,
+                phone: "",
+                gift: false,
+                method: "",
+              };
+              this.checkoutPage = false;
+              await this.fetchLessons();
+            } catch (error) {
+              console.error("Error submitting order:", error);
+              alert("Error: " + error.message);
+            }
+          },
+          closePopup() {
+            this.orderSubmitted = false;
+          },
+        },
+        mounted() {
+          this.fetchLessons();
+        },
+      });
+    </script>
+  </body>
+</html>
